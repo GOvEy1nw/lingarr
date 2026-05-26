@@ -9,4 +9,7 @@ public class SonarrEpisodeFile
 
     [JsonPropertyName("dateAdded")]
     public DateTime? DateAdded { get; set; }
+
+    [JsonPropertyName("mediaInfo")]
+    public MediaInfo MediaInfo { get; set; } = new();
 }

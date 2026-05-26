@@ -28,9 +28,17 @@
                         :media-type="MEDIA_TYPE.EPISODE"
                         :media="episode"
                         :subtitle="subtitle">
-                        <BadgeComponent>
+                        <BadgeComponent
+                            :classes="
+                                subtitle.isEmbedded
+                                    ? 'cursor-pointer text-primary-content border-dashed border-accent/70 bg-secondary'
+                                    : 'cursor-pointer text-primary-content border-accent bg-secondary'
+                            ">
                             {{ subtitle.language.toUpperCase() }}
-                            <span v-if="subtitle.caption" class="text-primary-content/50">
+                            <span v-if="subtitle.isEmbedded" class="ml-1 text-primary-content/50">
+                                EMB
+                            </span>
+                            <span v-else-if="subtitle.caption" class="text-primary-content/50">
                                 - {{ subtitle.caption.toUpperCase() }}
                             </span>
                         </BadgeComponent>

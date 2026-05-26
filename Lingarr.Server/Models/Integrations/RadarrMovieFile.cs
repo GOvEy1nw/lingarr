@@ -6,4 +6,7 @@ public class RadarrMovieFile
 {
     [JsonPropertyName("path")]
     public string? Path { get; set; } = string.Empty;
+
+    [JsonPropertyName("mediaInfo")]
+    public MediaInfo MediaInfo { get; set; } = new();
 }

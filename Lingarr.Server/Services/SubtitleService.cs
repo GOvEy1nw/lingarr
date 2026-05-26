@@ -122,6 +122,12 @@ public class SubtitleService : ISubtitleService
     /// <inheritdoc />
     public string CreateFilePath(string originalPath, string targetLanguage, string subtitleTag)
     {
+        // For embedded subtitle virtual paths, derive the output path from the video file location
+        if (EmbeddedSubtitlePath.IsEmbedded(originalPath))
+        {
+            return CreateEmbeddedSubtitleOutputPath(originalPath, targetLanguage, subtitleTag);
+        }
+
         var extension = Path.GetExtension(originalPath);
         var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalPath);
         var parts = fileNameWithoutExtension.Split('.');
@@ -176,6 +182,37 @@ public class SubtitleService : ISubtitleService
         var newFileName = string.Join(".", newParts) + extension;
         var directory = Path.GetDirectoryName(originalPath) ?? string.Empty;
         return Path.Combine(directory, newFileName);
+    }
+
+    /// <summary>
+    /// Derives an external SRT output path for an embedded subtitle translation.
+    /// The translated file is placed next to the video file:
+    /// <c>&lt;videoDir&gt;/&lt;videoStem&gt;.&lt;targetLang&gt;[.tag].srt</c>
+    /// </summary>
+    private static string CreateEmbeddedSubtitleOutputPath(
+        string embeddedPath,
+        string targetLanguage,
+        string subtitleTag)
+    {
+        EmbeddedSubtitlePath.TryParse(embeddedPath, out var videoFilePath, out _);
+
+        var videoDirectory = Path.GetDirectoryName(videoFilePath) ?? string.Empty;
+        var videoStem = Path.GetFileNameWithoutExtension(videoFilePath);
+
+        var parts = new List<string> { videoStem };
+
+        if (!string.IsNullOrEmpty(targetLanguage))
+        {
+            parts.Add(targetLanguage.ToLowerInvariant());
+        }
+
+        if (!string.IsNullOrEmpty(subtitleTag))
+        {
+            parts.Add(subtitleTag.ToLowerInvariant());
+        }
+
+        var newFileName = string.Join(".", parts) + ".srt";
+        return Path.Combine(videoDirectory, newFileName);
     }
 
     /// <inheritdoc />

@@ -8,6 +8,7 @@ using Lingarr.Server.Models.Api;
 using Lingarr.Server.Interfaces.Services;
 using Lingarr.Server.Interfaces.Services.Sync;
 using Lingarr.Server.Interfaces.Services.Integration;
+using Lingarr.Server.Models.FileSystem;
 
 namespace Lingarr.Server.Services;
 
@@ -82,6 +83,16 @@ public class MediaService : IMediaService
             }
 
             var subtitles = await _subtitleService.GetAllSubtitles(movie.Path);
+
+            // Append embedded subtitle entries sourced from Radarr mediaInfo
+            if (movie.VideoFilePath != null)
+            {
+                subtitles.AddRange(
+                    movie.EmbeddedSubtitleLanguages.Select(lang =>
+                        EmbeddedSubtitlePath.BuildSubtitle(movie.VideoFilePath, lang))
+                );
+            }
+
             var enrichedMovie = new MovieResponse
             {
                 Id = movie.Id,

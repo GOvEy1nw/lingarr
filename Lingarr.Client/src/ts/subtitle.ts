@@ -4,4 +4,5 @@ export interface ISubtitle {
     fileName: string
     format: string
     caption: string
+    isEmbedded: boolean
 }

@@ -195,6 +195,9 @@ public static class ServiceCollectionExtensions
         builder.Services.AddScoped<ISeasonSync, SeasonSync>();
         builder.Services.AddScoped<IShowSync, ShowSync>();
         builder.Services.AddScoped<IImageSync, ImageSync>();
+
+        // Add ffmpeg service for embedded subtitle extraction
+        builder.Services.AddSingleton<IFfmpegService, FfmpegService>();
         
     }
 

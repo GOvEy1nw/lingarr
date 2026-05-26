@@ -97,4 +97,83 @@ public class LanguageCodeService
         var culture = GetCulture(trimmedCode);
         return culture.Name.ToLowerInvariant();
     }
+
+    /// <summary>
+    /// Tries to resolve a two-letter ISO language code from an English language name such as those
+    /// returned by Radarr/Sonarr in <c>mediaInfo.subtitles</c> (e.g. "English" → "en", "French" → "fr").
+    /// Only neutral cultures (no region suffix) are considered so that "English" never resolves to
+    /// "en-US" by accident.
+    /// </summary>
+    /// <param name="englishName">The English language name to look up.</param>
+    /// <param name="code">The resolved two-letter ISO 639-1 code, or <c>null</c> on failure.</param>
+    /// <returns><c>true</c> when a match was found.</returns>
+    public bool TryGetCodeFromEnglishName(string englishName, out string? code)
+    {
+        code = null;
+        if (string.IsNullOrWhiteSpace(englishName))
+        {
+            return false;
+        }
+
+        var trimmed = englishName.Trim();
+
+        // First try an ordinary code lookup in case the caller already passes a code
+        if (Validate(trimmed))
+        {
+            code = GetNormalizedCode(trimmed);
+            return true;
+        }
+
+        // Search neutral cultures by their English name (e.g. CultureInfo("en").EnglishName == "English")
+        var match = Cultures.FirstOrDefault(c =>
+            c.IsNeutralCulture &&
+            string.Equals(c.EnglishName, trimmed, StringComparison.OrdinalIgnoreCase));
+
+        if (match == null)
+        {
+            return false;
+        }
+
+        code = match.TwoLetterISOLanguageName.ToLowerInvariant();
+        return true;
+    }
+
+    /// <summary>
+    /// Parses the subtitle languages string returned by Radarr/Sonarr in
+    /// <c>movieFile.mediaInfo.subtitles</c> or <c>episodeFile.mediaInfo.subtitles</c>.
+    /// The string may use " / " or ", " as a separator (e.g. "English / French" or "English, French").
+    /// Each token is resolved to a two-letter ISO 639-1 code; unrecognised tokens are skipped.
+    /// </summary>
+    /// <param name="subtitlesString">The raw subtitle languages string from Radarr/Sonarr.</param>
+    /// <returns>A deduplicated list of two-letter language codes.</returns>
+    public List<string> ParseEmbeddedSubtitleLanguages(string subtitlesString)
+    {
+        if (string.IsNullOrWhiteSpace(subtitlesString))
+        {
+            return [];
+        }
+
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var tokens = subtitlesString
+            .Split([" / ", ", ", "/", ","], StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var token in tokens)
+        {
+            var trimmed = token.Trim();
+            if (!TryGetCodeFromEnglishName(trimmed, out var code) || code == null)
+            {
+                _logger.LogDebug("Could not resolve embedded subtitle language token '{Token}' to a language code.", trimmed);
+                continue;
+            }
+
+            if (seen.Add(code))
+            {
+                result.Add(code);
+            }
+        }
+
+        return result;
+    }
 }

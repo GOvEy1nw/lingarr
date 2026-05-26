@@ -12,17 +12,20 @@ public class MovieSync : IMovieSync
 {
     private readonly LingarrDbContext _dbContext;
     private readonly PathConversionService _pathConversionService;
+    private readonly LanguageCodeService _languageCodeService;
     private readonly ILogger<MovieSync> _logger;
     private readonly IImageSync _imageSync;
 
     public MovieSync(
         LingarrDbContext dbContext,
         PathConversionService pathConversionService,
+        LanguageCodeService languageCodeService,
         ILogger<MovieSync> logger,
         IImageSync imageSync)
     {
         _dbContext = dbContext;
         _pathConversionService = pathConversionService;
+        _languageCodeService = languageCodeService;
         _logger = logger;
         _imageSync = imageSync;
     }
@@ -45,6 +48,10 @@ public class MovieSync : IMovieSync
             MediaType.Movie
         );
 
+        var embeddedLanguages = _languageCodeService.ParseEmbeddedSubtitleLanguages(
+            movie.MovieFile.MediaInfo.Subtitles
+        );
+
         if (movieEntity == null)
         {
             movieEntity = new Movie
@@ -54,6 +61,8 @@ public class MovieSync : IMovieSync
                 DateAdded = DateTime.Parse(movie.Added, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
                 FileName = Path.GetFileNameWithoutExtension(moviePath),
                 Path = Path.GetDirectoryName(moviePath) ?? string.Empty,
+                VideoFilePath = moviePath,
+                EmbeddedSubtitleLanguages = embeddedLanguages,
                 IncludeInTranslation = defaultInclude
             };
             _dbContext.Movies.Add(movieEntity);
@@ -64,6 +73,8 @@ public class MovieSync : IMovieSync
             movieEntity.DateAdded = DateTime.Parse(movie.Added, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
             movieEntity.FileName = Path.GetFileNameWithoutExtension(moviePath);
             movieEntity.Path = Path.GetDirectoryName(moviePath) ?? string.Empty;
+            movieEntity.VideoFilePath = moviePath;
+            movieEntity.EmbeddedSubtitleLanguages = embeddedLanguages;
         }
 
         _logger.LogInformation("Syncing movie: {MovieId} with Path: {Path}", movie.Id, movieEntity.Path);

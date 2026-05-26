@@ -16,6 +16,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 ARG TARGETARCH
 WORKDIR /app
 
+# Install ffmpeg for embedded subtitle extraction
+RUN apt-get update && apt-get install -y ffmpeg --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
 # Step 3: Build the server
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION

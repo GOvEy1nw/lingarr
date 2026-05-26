@@ -10,13 +10,16 @@ public class EpisodeSync : IEpisodeSync
 {
     private readonly ISonarrService _sonarrService;
     private readonly PathConversionService _pathConversionService;
+    private readonly LanguageCodeService _languageCodeService;
 
     public EpisodeSync(
         ISonarrService sonarrService,
-        PathConversionService pathConversionService)
+        PathConversionService pathConversionService,
+        LanguageCodeService languageCodeService)
     {
         _sonarrService = sonarrService;
         _pathConversionService = pathConversionService;
+        _languageCodeService = languageCodeService;
     }
 
     /// <inheritdoc />
@@ -33,7 +36,11 @@ public class EpisodeSync : IEpisodeSync
                 MediaType.Show
             );
 
-            SyncEpisode(episode, episodePath, season, episodePathResult?.EpisodeFile.DateAdded, defaultInclude);
+            var embeddedLanguages = _languageCodeService.ParseEmbeddedSubtitleLanguages(
+                episodePathResult?.EpisodeFile.MediaInfo.Subtitles ?? string.Empty
+            );
+
+            SyncEpisode(episode, episodePath, embeddedLanguages, season, episodePathResult?.EpisodeFile.DateAdded, defaultInclude);
         }
 
         RemoveNonExistentEpisodes(season, episodes);
@@ -44,9 +51,17 @@ public class EpisodeSync : IEpisodeSync
     /// </summary>
     /// <param name="episode">The Sonarr episode containing the source data</param>
     /// <param name="episodePath">The converted and mapped file path for the episode</param>
+    /// <param name="embeddedLanguages">Language codes of embedded subtitle tracks from Sonarr mediaInfo</param>
     /// <param name="season">The season entity that owns this episode</param>
     /// <param name="dateAdded">The date the episode file was added</param>
-    private static void SyncEpisode(SonarrEpisode episode, string episodePath, Season season, DateTime? dateAdded, bool defaultInclude = true)
+    /// <param name="defaultInclude">Whether to include in translation by default for new episodes</param>
+    private static void SyncEpisode(
+        SonarrEpisode episode,
+        string episodePath,
+        List<string> embeddedLanguages,
+        Season season,
+        DateTime? dateAdded,
+        bool defaultInclude = true)
     {
         var utcDateAdded = DateToUtc(dateAdded);
         var episodeEntity = season.Episodes.FirstOrDefault(se => se.SonarrId == episode.Id);
@@ -59,6 +74,8 @@ public class EpisodeSync : IEpisodeSync
                 Title = episode.Title,
                 FileName = Path.GetFileNameWithoutExtension(episodePath),
                 Path = Path.GetDirectoryName(episodePath),
+                VideoFilePath = episodePath,
+                EmbeddedSubtitleLanguages = embeddedLanguages,
                 Season = season,
                 DateAdded = utcDateAdded,
                 IncludeInTranslation = defaultInclude
@@ -71,6 +88,8 @@ public class EpisodeSync : IEpisodeSync
             episodeEntity.Title = episode.Title;
             episodeEntity.FileName = Path.GetFileNameWithoutExtension(episodePath);
             episodeEntity.Path = Path.GetDirectoryName(episodePath);
+            episodeEntity.VideoFilePath = episodePath;
+            episodeEntity.EmbeddedSubtitleLanguages = embeddedLanguages;
             episodeEntity.DateAdded = utcDateAdded;
         }
     }

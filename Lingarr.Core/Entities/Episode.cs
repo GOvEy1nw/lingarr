@@ -17,4 +17,13 @@ public class Episode : BaseEntity, IMedia
     [ForeignKey(nameof(SeasonId))]
     public required Season Season { get; set; }
     public bool IncludeInTranslation { get; set; } = true;
+
+    /// <summary>Full path to the video file (e.g. /tv/Show/Season 1/Episode.mkv).</summary>
+    public string? VideoFilePath { get; set; }
+
+    /// <summary>
+    /// Language codes of embedded subtitle tracks reported by Sonarr (e.g. ["en","fr"]).
+    /// Stored as a JSON string in the database.
+    /// </summary>
+    public List<string> EmbeddedSubtitleLanguages { get; set; } = [];
 }

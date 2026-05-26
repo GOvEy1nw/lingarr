@@ -4,7 +4,7 @@ param (
 )
 
 # Set variables
-$IMAGE_NAME = "lingarr/lingarr"
+$IMAGE_NAME = "govey1nw/lingarr"
 
 # Create a new builder instance if it doesn't exist
 Write-Host "Setting up docker buildx builder" -ForegroundColor Cyan

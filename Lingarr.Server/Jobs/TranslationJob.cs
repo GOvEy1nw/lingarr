@@ -26,6 +26,7 @@ public class TranslationJob
     private readonly ITranslationServiceFactory _translationServiceFactory;
     private readonly ITranslationRequestService _translationRequestService;
     private readonly ITranslationRequestEventService _eventService;
+    private readonly IFfmpegService _ffmpegService;
 
     public TranslationJob(
         ILogger<TranslationJob> logger,
@@ -37,7 +38,8 @@ public class TranslationJob
         IStatisticsService statisticsService,
         ITranslationServiceFactory translationServiceFactory,
         ITranslationRequestService translationRequestService,
-        ITranslationRequestEventService eventService)
+        ITranslationRequestEventService eventService,
+        IFfmpegService ffmpegService)
     {
         _logger = logger;
         _settings = settings;
@@ -49,6 +51,7 @@ public class TranslationJob
         _translationServiceFactory = translationServiceFactory;
         _translationRequestService = translationRequestService;
         _eventService = eventService;
+        _ffmpegService = ffmpegService;
     }
 
     [AutomaticRetry(Attempts = 0)]
@@ -59,6 +62,9 @@ public class TranslationJob
     {
         var jobName = JobContextFilter.GetCurrentJobTypeName();
         var jobId = JobContextFilter.GetCurrentJobId();
+
+        // Tracks a temp file created when extracting an embedded subtitle; deleted in the finally block.
+        string? tempSubtitleFile = null;
 
         try
         {
@@ -118,6 +124,21 @@ public class TranslationJob
                     : 0;
             }
 
+            // When the source is an embedded subtitle track, extract it to a temporary SRT file first.
+            // The temp path is used for validation and reading; the original embedded path is kept on
+            // request.SubtitleToTranslate so that CreateFilePath generates the correct output location.
+            var subtitlePathToRead = request.SubtitleToTranslate;
+            if (EmbeddedSubtitlePath.IsEmbedded(request.SubtitleToTranslate))
+            {
+                EmbeddedSubtitlePath.TryParse(request.SubtitleToTranslate, out var videoFilePath, out var embeddedLang);
+                tempSubtitleFile = Path.Combine(
+                    Path.GetTempPath(),
+                    $"lingarr_{request.Id}_{Guid.NewGuid():N}.srt");
+
+                await _ffmpegService.ExtractSubtitleAsync(videoFilePath, embeddedLang, tempSubtitleFile);
+                subtitlePathToRead = tempSubtitleFile;
+            }
+
             // validate subtitles
             if (validateSubtitles)
             {
@@ -157,7 +178,7 @@ public class TranslationJob
                     StripSubtitleFormatting = stripSubtitleFormatting
                 };
 
-                if (!_subtitleService.ValidateSubtitle(request.SubtitleToTranslate, validationOptions))
+                if (!_subtitleService.ValidateSubtitle(subtitlePathToRead, validationOptions))
                 {
                     _logger.LogWarning("Subtitle is not valid according to configured preferences.");
                     throw new TaskCanceledException("Subtitle is not valid according to configured preferences.");
@@ -167,7 +188,7 @@ public class TranslationJob
             // translate subtitles
             var translationService = _translationServiceFactory.CreateTranslationService(serviceType);
             var translator = new SubtitleTranslationService(translationService, _logger, _progressService);
-            var subtitles = await _subtitleService.ReadSubtitles(request.SubtitleToTranslate);
+            var subtitles = await _subtitleService.ReadSubtitles(subtitlePathToRead);
 
             // subtitle already carries a translation from an earlier prior run.
             // Group by Position and keep the most recent row in case the same position was used more than once.
@@ -287,6 +308,23 @@ public class TranslationJob
             await _translationRequestService.UpdateActiveCount();
             await _progressService.Emit(translationRequest, 0);
             throw;
+        }
+        finally
+        {
+            // Delete the temporary file created when extracting an embedded subtitle track
+            if (tempSubtitleFile != null && File.Exists(tempSubtitleFile))
+            {
+                try
+                {
+                    File.Delete(tempSubtitleFile);
+                    _logger.LogDebug("Deleted temporary embedded subtitle file: {TempFile}", tempSubtitleFile);
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogWarning(cleanupEx,
+                        "Failed to delete temporary embedded subtitle file: {TempFile}", tempSubtitleFile);
+                }
+            }
         }
     }
 
