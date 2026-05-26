@@ -29,7 +29,8 @@ public class TranslationFactory : ITranslationServiceFactory
                 languageCodeService),
 
             "google" => new GTranslatorService<GoogleTranslator>(
-                _serviceProvider.GetRequiredService<GoogleTranslator>(),
+                _serviceProvider,
+                _serviceProvider.GetRequiredService<IHttpClientFactory>(),
                 "/app/Statics/google_languages.json",
                 _serviceProvider.GetRequiredService<ISettingService>(),
                 _serviceProvider.GetRequiredService<ILogger<GoogleTranslator>>(),
@@ -37,7 +38,8 @@ public class TranslationFactory : ITranslationServiceFactory
             ),
 
             "bing" => new GTranslatorService<BingTranslator>(
-                _serviceProvider.GetRequiredService<BingTranslator>(),
+                _serviceProvider,
+                _serviceProvider.GetRequiredService<IHttpClientFactory>(),
                 "/app/Statics/bing_languages.json",
                 _serviceProvider.GetRequiredService<ISettingService>(),
                 _serviceProvider.GetRequiredService<ILogger<BingTranslator>>(),
@@ -45,7 +47,8 @@ public class TranslationFactory : ITranslationServiceFactory
             ),
 
             "microsoft" => new GTranslatorService<MicrosoftTranslator>(
-                _serviceProvider.GetRequiredService<MicrosoftTranslator>(),
+                _serviceProvider,
+                _serviceProvider.GetRequiredService<IHttpClientFactory>(),
                 "/app/Statics/microsoft_languages.json",
                 _serviceProvider.GetRequiredService<ISettingService>(),
                 _serviceProvider.GetRequiredService<ILogger<MicrosoftTranslator>>(),
@@ -53,7 +56,8 @@ public class TranslationFactory : ITranslationServiceFactory
             ),
 
             "yandex" => new GTranslatorService<YandexTranslator>(
-                _serviceProvider.GetRequiredService<YandexTranslator>(),
+                _serviceProvider,
+                _serviceProvider.GetRequiredService<IHttpClientFactory>(),
                 "/app/Statics/yandex_languages.json",
                 _serviceProvider.GetRequiredService<ISettingService>(),
                 _serviceProvider.GetRequiredService<ILogger<YandexTranslator>>(),
@@ -62,7 +66,8 @@ public class TranslationFactory : ITranslationServiceFactory
 
             "deepl" => new DeepLService(
                 _serviceProvider.GetRequiredService<ISettingService>(),
-                _serviceProvider.GetRequiredService<ILogger<DeepLService>>()
+                _serviceProvider.GetRequiredService<ILogger<DeepLService>>(),
+                languageCodeService
             ),
 
             "openai" => new OpenAiService(
@@ -106,5 +111,25 @@ public class TranslationFactory : ITranslationServiceFactory
 
             _ => throw new ArgumentException("Unsupported translation service type", nameof(serviceType))
         };
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<TranslationServiceEntry> CreateTranslationServices(IReadOnlyList<string> serviceTypes)
+    {
+        var services = new List<TranslationServiceEntry>(serviceTypes.Count);
+        foreach (var serviceType in serviceTypes)
+        {
+            var name = serviceType.ToLowerInvariant();
+            try
+            {
+                var service = CreateTranslationService(name);
+                services.Add(new TranslationServiceEntry(name, service, service as IBatchTranslationService));
+            }
+            catch (ArgumentException)
+            {
+                _logger.LogWarning("Skipping unknown translation service '{ServiceType}'.", name);
+            }
+        }
+        return services;
     }
 }
